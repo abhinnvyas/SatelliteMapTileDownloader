@@ -3,11 +3,162 @@ import math
 import requests
 import threading
 import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
-import time
+from tkinter import filedialog, messagebox, ttk
 
-# Function to calculate tile coordinates
+
+class TileDownloaderApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Map Tile Downloader")
+
+        # Variables
+        self.folder_var = tk.StringVar(value="./tiles")
+        self.start_zoom_var = tk.IntVar()
+        self.end_zoom_var = tk.IntVar()
+        self.start_lat_var = tk.DoubleVar()
+        self.start_lon_var = tk.DoubleVar()
+        self.end_lat_var = tk.DoubleVar()
+        self.end_lon_var = tk.DoubleVar()
+
+        self.downloading = False
+        self.pause_event = threading.Event()
+        self.stop_event = threading.Event()
+        self.pause_event.set()  # Initially set to allow running
+
+        # GUI Setup
+        self.setup_gui()
+
+    def setup_gui(self):
+        input_frame = tk.Frame(self.root, padx=10, pady=10)
+        input_frame.pack()
+
+        # Input fields
+        tk.Label(input_frame, text="Start Zoom:").grid(
+            row=0, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.start_zoom_var).grid(
+            row=0, column=1)
+
+        tk.Label(input_frame, text="End Zoom:").grid(
+            row=1, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.end_zoom_var).grid(
+            row=1, column=1)
+
+        tk.Label(input_frame, text="Start Latitude:").grid(
+            row=2, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.start_lat_var).grid(
+            row=2, column=1)
+
+        tk.Label(input_frame, text="Start Longitude:").grid(
+            row=3, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.start_lon_var).grid(
+            row=3, column=1)
+
+        tk.Label(input_frame, text="End Latitude:").grid(
+            row=4, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.end_lat_var).grid(
+            row=4, column=1)
+
+        tk.Label(input_frame, text="End Longitude:").grid(
+            row=5, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.end_lon_var).grid(
+            row=5, column=1)
+
+        tk.Label(input_frame, text="Save Folder:").grid(
+            row=6, column=0, sticky="e")
+        tk.Entry(input_frame, textvariable=self.folder_var).grid(
+            row=6, column=1)
+        tk.Button(input_frame, text="Browse",
+                  command=self.browse_folder).grid(row=6, column=2)
+
+        # Progress bar and status
+        self.progress_bar = ttk.Progressbar(
+            self.root, length=400, mode="determinate")
+        self.progress_bar.pack(pady=10)
+
+        self.status_label = tk.Label(
+            self.root, text="Ready to download tiles.", anchor="w")
+        self.status_label.pack(pady=10)
+
+        # Control buttons
+        self.control_frame = tk.Frame(self.root, pady=10)
+        self.control_frame.pack()
+
+        self.start_pause_button = tk.Button(
+            self.control_frame, text="Start Download", command=self.start_pause_download)
+        self.start_pause_button.pack(side="left", padx=5)
+
+        self.stop_button = tk.Button(
+            self.control_frame, text="Stop Download", state="disabled", command=self.stop_download)
+        self.stop_button.pack(side="left", padx=5)
+
+    def browse_folder(self):
+        folder_selected = filedialog.askdirectory()
+        if folder_selected:
+            self.folder_var.set(folder_selected)
+
+    def start_pause_download(self):
+        if not self.downloading:  # Start download
+            self.downloading = True
+            self.start_pause_button.config(text="Pause Download")
+            self.stop_button.config(state="normal")
+            self.stop_event.clear()
+            self.pause_event.set()  # Ensure the thread is allowed to run
+
+            self.download_thread = threading.Thread(
+                target=self.download_tiles)
+            self.download_thread.start()
+        elif self.pause_event.is_set():  # Pause download
+            self.pause_event.clear()
+            self.start_pause_button.config(text="Resume Download")
+        else:  # Resume download
+            self.pause_event.set()
+            self.start_pause_button.config(text="Pause Download")
+
+    def stop_download(self):
+        self.stop_event.set()
+        self.pause_event.set()  # Unblock if paused
+        self.downloading = False
+        self.start_pause_button.config(text="Start Download")
+        self.stop_button.config(state="disabled")
+        self.status_label.config(text="Download stopped.")
+
+    def download_tiles(self):
+        for z in range(self.start_zoom_var.get(), self.end_zoom_var.get() + 1):
+            z_folder = os.path.join(self.folder_var.get(), str(z))
+            os.makedirs(z_folder, exist_ok=True)
+
+            start_x = get_x_tile(self.start_lon_var.get(), z)
+            end_x = get_x_tile(self.end_lon_var.get(), z)
+            start_y = get_y_tile(self.start_lat_var.get(), z)
+            end_y = get_y_tile(self.end_lat_var.get(), z)
+
+            print(f"Start X: {start_x}, End X: {end_x}")
+            print(f"Start Y: {start_y}, End Y: {end_y}")
+
+            # Download tiles for each x, y coordinate
+            for x in range(start_x, end_x + 1):
+                for y in range(start_y, end_y + 1):
+                    x_folder = os.path.join(z_folder, str(x))
+                    os.makedirs(x_folder, exist_ok=True)
+                    y_file = os.path.join(x_folder, f"{y}.jpg")
+
+                    # Prepare the tile URL
+                    tile_url = "https://mt0.google.com/vt/lyrs=s&hl=en&x={x_value}&y={y_value}&z={z_value}".format(
+                        x_value=x, y_value=y, z_value=z)
+                    print(f"Downloading tile: {tile_url}")
+
+                    # Download and save the tile
+                    response = requests.get(tile_url)
+                    if response.status_code == 200:
+                        with open(y_file, 'wb') as file:
+                            file.write(response.content)
+                    else:
+                        print(f"Failed to download tile {x}, {y} at zoom {z}")
+            print(
+                f"Finished downloading tiles for zoom level {z}. Sleeping for 2 seconds.")
+            # Sleep for 2 seconds (to avoid hitting rate limits)
+            import time
+            time.sleep(2)
 
 
 def get_x_tile(lon, zoom):
@@ -17,142 +168,8 @@ def get_x_tile(lon, zoom):
 def get_y_tile(lat, zoom):
     return math.floor((1 - math.log(math.tan(math.radians(lat)) + 1 / math.cos(math.radians(lat))) / math.pi) / 2 * math.pow(2, zoom))
 
-# Download and display the tiles
 
-
-def download_tiles(start_zoom, end_zoom, start_latitude, start_longitude, end_latitude, end_longitude, folder, canvas, status_label):
-    url = "https://mt0.google.com/vt/lyrs=s&hl=en&x={x_value}&y={y_value}&z={z_value}"
-
-    # Tile size (in pixels)
-    tile_size = 256
-
-    # Iterate over zoom levels
-    for z in range(start_zoom, end_zoom + 1):
-        z_folder = os.path.join(folder, str(z))
-        os.makedirs(z_folder, exist_ok=True)
-
-        start_x = get_x_tile(start_longitude, z)
-        end_x = get_x_tile(end_longitude, z)
-        start_y = get_y_tile(start_latitude, z)
-        end_y = get_y_tile(end_latitude, z)
-
-        print(f"Downloading tiles at zoom level {z}...")
-
-        total_tiles = (end_x - start_x + 1) * (end_y - start_y + 1)
-        downloaded_tiles = 0
-
-        for x in range(start_x, end_x + 1):
-            for y in range(start_y, end_y + 1):
-                x_folder = os.path.join(z_folder, str(x))
-                os.makedirs(x_folder, exist_ok=True)
-                y_file = os.path.join(x_folder, f"{y}.jpg")
-
-                # Prepare the tile URL
-                tile_url = url.format(x_value=x, y_value=y, z_value=z)
-
-                # Download the tile
-                response = requests.get(tile_url)
-                if response.status_code == 200:
-                    with open(y_file, 'wb') as file:
-                        file.write(response.content)
-
-                    # Load the image and display it on the canvas
-                    img = Image.open(y_file)
-                    img = img.resize((tile_size, tile_size),
-                                     Image.Resampling.LANCZOS)
-                    img_tk = ImageTk.PhotoImage(img)
-
-                    # Calculate the position for this tile on the canvas
-                    pos_x = (x - start_x) * tile_size
-                    pos_y = (y - start_y) * tile_size
-
-                    # Place the image on the canvas
-                    canvas.create_image(pos_x, pos_y, image=img_tk)
-                    canvas.image = img_tk  # Keep a reference
-
-                    downloaded_tiles += 1
-                    status_label.config(
-                        text=f"Downloading tiles... {downloaded_tiles}/{total_tiles} tiles downloaded")
-                    canvas.update_idletasks()
-                else:
-                    print(f"Failed to download tile {x}, {y} at zoom {z}")
-
-        print(
-            f"Finished downloading tiles for zoom level {z}. Sleeping for 2 seconds.")
-        time.sleep(2)
-
-    # Final message once download is complete
-    messagebox.showinfo("Download Complete", "All tiles have been downloaded!")
-
-# GUI for input fields and real-time status
-
-
-def start_download():
-    try:
-        start_zoom = int(start_zoom_entry.get())
-        end_zoom = int(end_zoom_entry.get())
-        start_latitude = float(start_latitude_entry.get())
-        start_longitude = float(start_longitude_entry.get())
-        end_latitude = float(end_latitude_entry.get())
-        end_longitude = float(end_longitude_entry.get())
-
-        folder = "./tiles"  # Folder to save the tiles
-
-        # Initialize canvas for map tiles
-        canvas.delete("all")  # Clear the canvas before drawing new tiles
-
-        # Start a thread for downloading tiles
-        download_thread = threading.Thread(target=download_tiles, args=(
-            start_zoom, end_zoom, start_latitude, start_longitude, end_latitude, end_longitude, folder, canvas, status_label))
-        download_thread.start()
-
-    except ValueError:
-        messagebox.showerror(
-            "Input Error", "Please enter valid numeric values.")
-
-
-# GUI setup using Tkinter
-root = tk.Tk()
-root.title("Tile Downloader and Viewer")
-
-# Input fields for start and end zoom, latitudes, and longitudes
-frame = tk.Frame(root)
-frame.pack(pady=10)
-
-tk.Label(frame, text="Start Zoom:").grid(row=0, column=0)
-start_zoom_entry = tk.Entry(frame)
-start_zoom_entry.grid(row=0, column=1)
-
-tk.Label(frame, text="End Zoom:").grid(row=1, column=0)
-end_zoom_entry = tk.Entry(frame)
-end_zoom_entry.grid(row=1, column=1)
-
-tk.Label(frame, text="Start Latitude:").grid(row=2, column=0)
-start_latitude_entry = tk.Entry(frame)
-start_latitude_entry.grid(row=2, column=1)
-
-tk.Label(frame, text="Start Longitude:").grid(row=3, column=0)
-start_longitude_entry = tk.Entry(frame)
-start_longitude_entry.grid(row=3, column=1)
-
-tk.Label(frame, text="End Latitude:").grid(row=4, column=0)
-end_latitude_entry = tk.Entry(frame)
-end_latitude_entry.grid(row=4, column=1)
-
-tk.Label(frame, text="End Longitude:").grid(row=5, column=0)
-end_longitude_entry = tk.Entry(frame)
-end_longitude_entry.grid(row=5, column=1)
-
-# Button to start the tile download
-start_button = tk.Button(root, text="Start Download", command=start_download)
-start_button.pack(pady=10)
-
-# Status label to show download progress
-status_label = tk.Label(root, text="Ready to download tiles.")
-status_label.pack(pady=10)
-
-# Canvas to show the downloaded map tiles
-canvas = tk.Canvas(root, width=768, height=768)  # Adjust canvas size as needed
-canvas.pack()
-
-root.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TileDownloaderApp(root)
+    root.mainloop()

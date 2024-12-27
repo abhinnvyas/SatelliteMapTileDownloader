@@ -10,7 +10,7 @@ $start_longitude = 80.23895;
 $end_latitude = 13.05991;
 $end_longitude = 80.24551;
 
-$folder = "/home/sivaraj/Projects/DroneIOT/mapserver/tiles";
+$folder = "./tiles";
 
 /* Configuration - End */
 
