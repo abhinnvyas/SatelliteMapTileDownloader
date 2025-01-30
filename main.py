@@ -2,7 +2,7 @@ import os
 import math
 import requests
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox
 import threading
 import time
 
@@ -23,16 +23,16 @@ class TileDownloaderApp(tk.Tk):
 
         # Window configuration
         self.title("Map Tile Downloader")
-        self.geometry("300x300")
+        # self.geometry("400x350")
         self.resizable(False, False)  # Fixed window size
 
         # Set default values
-        self.start_zoom = 0
-        self.end_zoom = 0
-        self.start_latitude = 0
-        self.start_longitude = 0
-        self.end_latitude = 0
-        self.end_longitude = 0
+        self.start_zoom = 15
+        self.end_zoom = 19
+        self.start_latitude = 13.06637
+        self.start_longitude = 80.23895
+        self.end_latitude = 13.05991
+        self.end_longitude = 80.24551
         self.folder = "./tiles"
 
         # Create widgets
@@ -42,7 +42,7 @@ class TileDownloaderApp(tk.Tk):
         self.is_downloading = False
 
     def create_widgets(self):
-        # Create the input fields and labels in the required order
+        # Center the widgets using grid
         tk.Label(self, text="Start Zoom:").grid(
             row=0, column=0, padx=5, pady=5, sticky="w")
         self.start_zoom_entry = tk.Entry(self, width=20)
@@ -79,37 +79,22 @@ class TileDownloaderApp(tk.Tk):
         self.end_longitude_entry.insert(0, str(self.end_longitude))
         self.end_longitude_entry.grid(row=5, column=1, padx=5, pady=5)
 
-        # Folder selection with browse button
         tk.Label(self, text="Save Folder:").grid(
             row=6, column=0, padx=5, pady=5, sticky="w")
         self.folder_entry = tk.Entry(self, width=20)
         self.folder_entry.insert(0, self.folder)
         self.folder_entry.grid(row=6, column=1, padx=5, pady=5)
 
-        # Browse button
-        self.browse_button = tk.Button(
-            self, text="Browse", command=self.browse_folder)
-        self.browse_button.grid(row=6, column=2, padx=5, pady=5)
-
-        # Status label above the button
+        # Status label to show downloading state
         self.status_label = tk.Label(
-            self, text="Start Downloading Now...", fg="green", font=("Helvetica", 8))
-        self.status_label.grid(
-            row=7, column=0, columnspan=2, padx=5, pady=5, sticky="n")
+            self, text="Status: Idle", fg="green", wraplength=350)
+        self.status_label.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
 
-        # Start/Stop button centered below the status label
+        # Start/Stop button
         self.download_button = tk.Button(
             self, text="Start Download", width=20, command=self.toggle_download, bg="green", fg="white")
         self.download_button.grid(
             row=8, column=0, columnspan=2, padx=5, pady=10)
-
-    def browse_folder(self):
-        # Open a directory chooser dialog
-        folder_selected = filedialog.askdirectory()
-        if folder_selected:
-            self.folder_entry.delete(0, tk.END)  # Clear current folder entry
-            # Set the new folder path
-            self.folder_entry.insert(0, folder_selected)
 
     def toggle_download(self):
         if self.is_downloading:
@@ -140,7 +125,8 @@ class TileDownloaderApp(tk.Tk):
                 text="Stop Download", bg="red", fg="white")
 
             # Update status
-            self.status_label.config(text="Downloading tiles...", fg="orange")
+            self.status_label.config(
+                text="Status: Downloading...", fg="orange")
 
             # Start the download in a separate thread
             self.is_downloading = True
@@ -154,7 +140,7 @@ class TileDownloaderApp(tk.Tk):
         self.is_downloading = False
         self.download_button.config(
             text="Start Download", bg="green", fg="white")
-        self.status_label.config(text="Download Stopped", fg="red")
+        self.status_label.config(text="Status: Stopped", fg="red")
         self.enable_inputs()
 
     def disable_inputs(self):
@@ -207,7 +193,7 @@ class TileDownloaderApp(tk.Tk):
 
                     # Update status with the current download URL
                     self.status_label.config(
-                        text=f"Downloading files for zoom level {z}: {x}, {y}", fg="orange")
+                        text=f"Downloading for Zoom {z}: {tile_url}", fg="orange")
                     self.update_idletasks()
 
                     # Download and save the tile
@@ -221,11 +207,12 @@ class TileDownloaderApp(tk.Tk):
         if self.is_downloading:
             messagebox.showinfo("Download Complete",
                                 "All tiles have been downloaded.")
-            self.status_label.config(text="Download Complete", fg="green")
+            self.status_label.config(
+                text="Status: Download Complete", fg="green")
         else:
             messagebox.showinfo("Download Stopped",
                                 "Tile download has been stopped.")
-            self.status_label.config(text="Download Stopped", fg="red")
+            self.status_label.config(text="Status: Stopped", fg="red")
 
         self.stop_download()
 
